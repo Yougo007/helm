@@ -6,7 +6,7 @@ FROM alpine:3
 ARG VERSION
 
 # ENV BASE_URL="https://storage.googleapis.com/kubernetes-helm"
-ENV BASE_URL="https://get.helm.sh"
+ENV BASE_URL="https://helm.sh"
 
 RUN case `uname -m` in \
         x86_64) ARCH=amd64; ;; \
