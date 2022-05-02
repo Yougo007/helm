@@ -18,7 +18,7 @@
 steps:
 - id: 'build helm image'
   name: 'gcr.io/cloud-builders/docker'
-  args: ['build', '-t', 'gcr.io/yougo-projects-labs/helm:$COMMIT_SHA', '.' ]
+  args: ['build', '-t', 'gcr.io/yougo-projects-labs/helm', '.' ]
   
 # Push to GCR
 - name: 'gcr.io/cloud-builders/docker'
