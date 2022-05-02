@@ -1,79 +1,120 @@
-### After Travis CI adjusts their plan, we don't have enough free credit to run the build. So daily build has been adjusted to weekly. If you don't get latest version, please wait for one week.
+# [Helm](https://docs.helm.sh/) tool builder
 
-# kubernetes helm
+## Using this builder with Google Container Engine
 
-Auto-trigger docker build for [kubernetes helm](https://github.com/kubernetes/helm) when new release is announced
+To use this builder, your
+[Cloud Build Service Account](https://cloud.google.com/cloud-build/docs/securing-builds/set-service-account-permissions)
+will need IAM permissions sufficient for the operations you want to perform. For
+typical read-only usage, the "Kubernetes Engine Viewer" role is sufficient. To
+deploy container images on a GKE cluster, the "Kubernetes Engine Developer" role
+is sufficient. Check the
+[GKE IAM page](https://cloud.google.com/kubernetes-engine/docs/concepts/access-control)
+for details.
 
-[![DockerHub Badge](http://dockeri.co/image/alpine/helm)](https://hub.docker.com/r/alpine/helm/)
+For most use, kubectl will need to be configured to point to a specific GKE
+cluster. You can configure the cluster by setting environment variables.
 
-[![Build Status](https://app.travis-ci.com/alpine-docker/helm.svg?branch=master)](https://app.travis-ci.com/alpine-docker/helm)
+    # Set region for regional GKE clusters or Zone for Zonal clusters
+    CLOUDSDK_COMPUTE_REGION=<your cluster's region>
+    or
+    CLOUDSDK_COMPUTE_ZONE=<your cluster's zone>
 
-## NOTES
+    # Name of GKE cluster
+    CLOUDSDK_CONTAINER_CLUSTER=<your cluster's name>
 
-The latest docker tag is the latest release version (https://github.com/helm/helm/releases/latest)
+    # (Optional) Project of GKE Cluster, only if you want helm to authenticate
+    # to a GKE cluster in another project (requires IAM Service Accounts are properly setup)
+    GCLOUD_PROJECT=<destination cluster's GCP project>
 
-Please avoid to use `latest` tag for any production deployment. Tag with right version is the proper way, such as `alpine/helm:3.1.1`
+Setting the environment variables above will cause this step's `entrypoint` to
+first run a command to fetch cluster credentials as follows.
 
-If you need run `kubectl` with `helm` together, please use another image [alpine/k8s](https://github.com/alpine-docker/k8s)
+    gcloud container clusters get-credentials --zone "$CLOUDSDK_COMPUTE_ZONE" "$CLOUDSDK_CONTAINER_CLUSTER"`
 
-## Additional notes about multi-arch images
+Then, `kubectl` and consequently `helm` will have the configuration needed to talk to your GKE cluster.
 
-This feature was added on 23th May 2021.
+## Building this builder
 
-1. Version 3.5.4 and 3.6.0-rc.1 are manually pushed by me with multi-arch image supported
-2. Older version will be not updated as multi-arch images
-3. Newer vesions from now on will be multi-arch images (`--platform linux/amd64,linux/arm/v7,linux/arm64/v8,linux/arm/v6,linux/ppc64le,linux/s390x`)
-4. tag `latest` doesn't suppoort multi-arch yet, because I can't find a good way to tag it only without rebuild it.
-5. I don't support other architectures, except `amd64`, because I have no other environment to do that. If you have any issues with other arch, you need raise PR to fix it.
-6. There would be no difference for `docker pull` , `docker run` command with other arch, you can run it as normal. For example, if you need pull image from arm (such as new Mac M1 chip), you can run `docker pull alpine/helm:3.5.4` to get the image directly. Remember, it doesn't support `latest` tag with multi-arch image yet.
+To build this builder, run the following command in this directory.
 
-### Github Repo
+    gcloud builds submit . --config=cloudbuild.yaml
 
-https://github.com/alpine-docker/helm
+You can also build this builder setting `Helm` version via in `cloudbuild.yaml`, no need to do that in `Dockerfile` anymore.
 
-### Daily Travis CI build logs
+    args: ['build', '--tag=gcr.io/$PROJECT_ID/helm', '--build-arg', 'HELM_VERSION=v2.10.0', '.']
 
-https://travis-ci.com/alpine-docker/helm
+## Using Helm
 
-### Docker image tags
+This builder supports three install options of Helm:
+* The default one when where Helm v3 is used and thus tiller is no longer present
+* Helm v2 where `tiller` gets installed into your GKE cluster.
+* Secure v2 `Tillerless Helm` where `tiller` runs outside the GKE cluster.
 
-https://hub.docker.com/r/alpine/helm/tags/
+Check the [examples](examples) folder for examples of using Helm in `Cloud Build` pipelines.
 
-# Usage
+**Note:** Do not forget to update `zone` and GKE `cluster` settings in the `cloudbuild.yaml` files.
 
-    # mount local folders in container.
-    docker run -ti --rm -v $(pwd):/apps -w /apps \
-        -v ~/.kube:/root/.kube -v ~/.helm:/root/.helm -v ~/.config/helm:/root/.config/helm \
-        -v ~/.cache/helm:/root/.cache/helm \
-        alpine/helm
+### Helm v3
 
-    # Run helm with special version. The tag is helm's version
-    docker run -ti --rm -v $(pwd):/apps -w /apps \
-        -v ~/.kube:/root/.kube -v ~/.helm:/root/.helm -v ~/.config/helm:/root/.config/helm \
-        -v ~/.cache/helm:/root/.cache/helm \
-        alpine/helm:3.1.1
+The default one.
 
-    # run container as command
-    alias helm="docker run -ti --rm -v $(pwd):/apps -w /apps \
-        -v ~/.kube:/root/.kube -v ~/.helm:/root/.helm -v ~/.config/helm:/root/.config/helm \
-        -v ~/.cache/helm:/root/.cache/helm \
-        alpine/helm"
-    helm --help
-    
-    # example in ~/.bash_profile
-    alias helm='docker run -e KUBECONFIG="/root/.kube/config:/root/.kube/some-other-context.yaml" -ti --rm -v $(pwd):/apps -w /apps \
-        -v ~/.kube:/root/.kube -v ~/.helm:/root/.helm -v ~/.config/helm:/root/.config/helm \
-        -v ~/.cache/helm:/root/.cache/helm \
-        alpine/helm'
+You can test e.g. installing a chart via `Helm`, running the following command.
 
-# Why we need it
+    gcloud builds submit . --config=examples/chart-install/cloudbuild.yaml
 
-Mostly it is used during CI/CD (continuous integration and continuous delivery) or as part of an automated build/deployment
+And to list Helm releases.
 
-# The Processes to build this image
+    $ gcloud builds submit . --config=examples/releases-list/cloudbuild.yaml
 
-* Enable Travis CI cronjob on this repo to run build daily on master branch
-* Check if there are new tags/releases announced via Github REST API
-* Match the exist docker image tags via Hub.docker.io REST API
-* If not matched, build the image with release version and push to https://hub.docker.com/
-* Get the latest version from https://github.com/helm/helm/releases/latest, pull the image with that version, tag as `alpine/helm:latest` and push to hub.docker.com
+
+### Helm v2 + Tiller setup
+
+The v2 choice when `Tillerless` is not toggled on. `tiller` will be installed into your GKE cluster (consider the security implications, `tiller` has historically had some issues).
+
+### Helm v2 + Tillerless Helm setup
+
+`Tillerless Helm` solves many `tiller` [security issues](https://docs.helm.sh/using_helm/#securing-your-helm-installation), as `tiller` runs outside the GKE cluster, locally in the container, and stores configs as secrets using the [secrets storage backend](https://docs.helm.sh/using_helm/#storage-backends).
+It is based on the [Tillerless](https://rimusz.net/tillerless-helm/) [plugin](https://github.com/rimusz/helm-tiller), and is available in the image.
+
+#### Enabling Tillerless Helm
+
+Set `TILLERLESS=true` and optionally `TILLER_NAMESPACE=<namespace>`.
+
+You can test e.g. installing a chart via `Tillerless Helm`, running the following command.
+
+    $ gcloud builds submit . --config=examples/chart-install-tillerless/cloudbuild.yaml
+
+And to list Helm releases.
+
+    $ gcloud builds submit . --config=examples/releases-list-tillerless/cloudbuild.yaml
+
+## RBAC Considerations
+
+**Note:** If your GKE cluster has `RBAC` enabled, you must grant Cloud Build Service Account the `cluster-admin` role (or make it more specific for your use case)
+
+    $ export PROJECT_ID="$(gcloud projects describe $(gcloud config get-value core/project -q) --format='get(projectNumber)')"
+    $ export SERVICE_ACCOUNT="${PROJECT_ID}@cloudbuild.gserviceaccount.com"
+
+    # Add IAM policy for cloudbuild cluster administration
+    $ gcloud projects add-iam-policy-binding ${PROJECT_ID} \
+      --member=serviceAccount:${SERVICE_ACCOUNT} \
+      --role=roles/container.admin
+
+    # and add a clusterrolebinding
+    $ kubectl create clusterrolebinding cluster-admin-${SERVICE_ACCOUNT} \
+      --clusterrole cluster-admin --user ${SERVICE_ACCOUNT}
+
+## Configuration
+
+The following options are configurable via environment variables passed to the build step in the `env` parameter:
+
+| Option        | Description   |
+| ------------- | ------------- |
+| DIFF_PLUGIN_VERSION | [Diff plugin](https://github.com/databus23/helm-diff) version to install, optional |
+| GCS_PLUGIN_VERSION | [GCS plugin](https://github.com/nouney/helm-gcs) version to install, optional |
+| HELM_REPO_NAME | External Helm repository name, optional |
+| HELM_REPO_URL | External Helm repo URL, optional |
+| HELMFILE_VERSION | [Helmfile](https://github.com/roboll/helmfile) version to install, optional (if using helm v3, please use the helmfile builder)
+| TILLERLESS | If true, Tillerless Helm is enabled, optional |
+| TILLER_NAMESPACE | Tiller namespace, optional |
+| SKIP_CLUSTER_CONFIG | If true, doesn't check or fetch GKE cluster config/creds, optional |
