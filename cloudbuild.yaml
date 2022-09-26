@@ -18,10 +18,10 @@
 steps:
 - id: 'build helm image'
   name: 'gcr.io/cloud-builders/docker'
-  args: ['build', '-t', 'gcr.io/yougo-projects-labs/helm', '.' ]
+  args: ['build', '-t', 'gcr.io/yougo-k8-hardway-256417/helm', '.' ]
   
 # Push to GCR
 - name: 'gcr.io/cloud-builders/docker'
   id: 'Pushing image to GCR'
-  args: ['push', 'gcr.io/yougo-projects-labs/helm']
+  args: ['push', 'gcr.io/yougo-k8-hardway-256417/helm']
   
