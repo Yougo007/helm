@@ -100,7 +100,7 @@ And to list Helm releases.
       --member=serviceAccount:${SERVICE_ACCOUNT} \
       --role=roles/container.admin
 
-    # and add a clusterrolebinding
+    # and add a clusterrolebinding .
     $ kubectl create clusterrolebinding cluster-admin-${SERVICE_ACCOUNT} \
       --clusterrole cluster-admin --user ${SERVICE_ACCOUNT}
 
